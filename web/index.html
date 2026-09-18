@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LED Matrix Control</title>
+  <style>
+    :root { color-scheme: dark; font: 16px system-ui, sans-serif; }
+    body { max-width: 56rem; margin: 2rem auto; padding: 0 1rem; }
+    .toolbar, .grid { display: grid; gap: 1rem; }
+    .grid { grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); }
+    article { border: 1px solid #555; border-radius: .5rem; padding: 1rem; }
+    label { display: block; margin: .8rem 0 .3rem; }
+    input, button { box-sizing: border-box; font: inherit; padding: .6rem; width: 100%; }
+    input[type=color], input[type=range], button { cursor: pointer; }
+    button { margin-top: 1rem; }
+    #status { min-height: 1.5rem; margin-top: 1rem; color: #9f9; }
+  </style>
+</head>
+<body>
+  <h1>LED Matrix</h1>
+  <div class="toolbar">
+    <label for="device">Device URL</label>
+    <input id="device" value="http://led-matrix.local" placeholder="http://192.168.1.50">
+    <button id="load">Load panels</button>
+    <button id="wifiSetup">Change Wi-Fi</button>
+  </div>
+  <div id="panels" class="grid"></div>
+  <article>
+    <h2>Emoji objects</h2>
+  <div id="objects"></div>
+    <button id="addObject">Add emoji</button>
+  </article>
+  <p id="networkInfo" role="status"></p>
+  <div id="status" role="status"></div>
+  <script>
+    const $ = id => document.getElementById(id);
+    const emojis = ['😀', '🙂', '❤️', '⭐', '👍', '⬆️', '⬇️', '🔥', '💰', '🤑', '🖕', 'fuck-you-smiley', '🤬', '🤮', '👎', 'fuck-you-double-text', 'fuck-you-double', 'fuck-afd'];
+    let objectItems = [];
+    const baseUrl = () => ($('device').value || window.location.origin).replace(/\/$/, '');
+    const colorHex = panel => '#' + [panel.r, panel.g, panel.b].map(value => value.toString(16).padStart(2, '0')).join('');
+    function panelEditor(panel, index) {
+      const card = document.createElement('article');
+      card.innerHTML = `<h2>Module ${index + 1}</h2>
+        <label>Message</label><input class="text" maxlength="120">
+        <label>Color</label><input class="color" type="color">
+        <label>Brightness: <span class="brightnessValue"></span></label>
+        <input class="brightness" type="range" min="0" max="255">
+        <button class="send">Update module</button>`;
+      card.querySelector('.text').value = panel.text || '';
+      card.querySelector('.color').value = colorHex(panel.color || {r: 255, g: 255, b: 255});
+      card.querySelector('.brightness').value = panel.brightness ?? 64;
+      const range = card.querySelector('.brightness');
+      const value = card.querySelector('.brightnessValue');
+      value.textContent = range.value;
+      range.addEventListener('input', () => value.textContent = range.value);
+      card.querySelector('.send').addEventListener('click', async () => {
+        const hex = card.querySelector('.color').value;
+        const body = { panel: index, text: card.querySelector('.text').value,
+          color: {r: parseInt(hex.slice(1, 3), 16), g: parseInt(hex.slice(3, 5), 16), b: parseInt(hex.slice(5, 7), 16)},
+          brightness: Number(range.value), objects: readObjects() };
+        $('status').textContent = 'Sending...';
+        try {
+          const response = await fetch(baseUrl() + '/api/display', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+          if (!response.ok) throw new Error(await response.text());
+          $('status').textContent = `Module ${index + 1} updated`;
+        } catch (error) { $('status').textContent = 'Error: ' + error.message; }
+      });
+      return card;
+    }
+    function renderObjects() {
+      $('objects').replaceChildren(...objectItems.map((item, index) => {
+        const row = document.createElement('div');
+        row.innerHTML = `<select class="emoji">${emojis.map(emoji => `<option>${emoji}</option>`).join('')}</select>
+          <input class="x" type="number" min="0" max="255" placeholder="x">
+          <input class="y" type="number" min="0" max="63" placeholder="y">
+          <input class="size" type="number" min="8" max="64" placeholder="size">
+          <button type="button">Remove</button>`;
+        row.querySelector('.emoji').value = item.emoji;
+        row.querySelector('.x').value = item.x;
+        row.querySelector('.y').value = item.y;
+        row.querySelector('.size').value = item.size;
+        row.querySelector('button').onclick = () => { objectItems.splice(index, 1); renderObjects(); };
+        return row;
+      }));
+    }
+    function readObjects() {
+      return [...$('objects').children].map(row => ({
+        emoji: row.querySelector('.emoji').value,
+        x: Number(row.querySelector('.x').value), y: Number(row.querySelector('.y').value),
+        size: Number(row.querySelector('.size').value)
+      }));
+    }
+    async function loadWifiStatus() {
+      try {
+        const state = await (await fetch(baseUrl() + '/api/wifi/status')).json();
+        $('networkInfo').textContent = state.connected
+          ? `Wi-Fi: ${state.ssid} | IP: ${state.ip} | http://${state.hostname}/`
+          : `Wi-Fi not connected | setup AP: ${state.ssid}`;
+      } catch (error) { $('networkInfo').textContent = 'Wi-Fi status unavailable'; }
+    }
+    async function loadPanels() {
+      try {
+        const response = await fetch(baseUrl() + '/api/state');
+        if (!response.ok) throw new Error(await response.text());
+        const state = await response.json();
+        objectItems = state.objects || [];
+        renderObjects();
+        $('panels').replaceChildren(...state.panels.map(panelEditor));
+        $('status').textContent = `${state.panelCount} module(s) loaded`;
+      } catch (error) { $('status').textContent = 'Error: ' + error.message; }
+    }
+    $('load').addEventListener('click', loadPanels);
+    $('addObject').addEventListener('click', () => {
+      objectItems.push({emoji: '🔥', x: 0, y: 0, size: 56});
+      renderObjects();
+    });
+    $('wifiSetup').addEventListener('click', async () => {
+      try {
+        const response = await fetch(baseUrl() + '/api/wifi/setup', {method: 'POST'});
+        if (!response.ok) throw new Error(await response.text());
+        $('status').textContent = 'Setup AP starting. Connect to LEDMatrix-Setup (password: matrix-setup), then open http://192.168.4.1/';
+      } catch (error) { $('status').textContent = 'Error: ' + error.message; }
+    });
+    loadWifiStatus();
+    loadPanels();
+  </script>
+</body>
+</html>

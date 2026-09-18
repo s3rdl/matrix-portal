@@ -1,0 +1,14 @@
+[Unit]
+Description=LEDMatrix Raspberry Pi HUB75 test server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/ledmatrix/rpi
+ExecStart=/opt/ledmatrix/rpi/.venv/bin/python /opt/ledmatrix/rpi/server.py --config /opt/ledmatrix/rpi/config.json
+Restart=on-failure
+User=root
+
+[Install]
+WantedBy=multi-user.target
