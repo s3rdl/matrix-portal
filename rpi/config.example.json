@@ -9,7 +9,7 @@
   "hardware_mapping": "regular",
   "gpio_slowdown": 2,
   "disable_hardware_pulsing": false,
-  "brightness": 64,
+  "brightness": 0,
   "font": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
   "font_size": 12
 }
