@@ -18,6 +18,9 @@
     .emoji-control.open .emoji-menu { display: grid; gap: .2rem; }
     .emoji-option { display: flex; align-items: center; gap: .5rem; border: 0; background: transparent; color: inherit; text-align: left; }
     .emoji-option:hover { background: #343b48; }
+    #panelControls { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; margin: 1rem 0; }
+    #panelControls strong { width: 100%; }
+    #panelControls button { width: auto; }
     #status { min-height: 1.5rem; margin-top: 1rem; color: #9f9; }
   </style>
 </head>
@@ -25,7 +28,8 @@
   <h1>LEDMatrix Pi Test</h1>
   <p>Full wall coordinates: X 0-255, Y 0-63.</p>
   <div id="objects"></div>
-  <button id="add">Add pixel art</button>
+    <button id="add">Add pixel art</button>
+    <div id="panelControls" aria-label="Panel blanking controls"></div>
   <label for="color">Background color</label>
   <input id="color" type="color" value="#202020">
   <label for="brightness">Brightness: <span id="brightnessValue">0</span></label>
@@ -46,6 +50,8 @@
       {value: 'fuck-afd', label: 'fuck-afd', image: '/fuck-afd.png'}
     ];
     const $ = id => document.getElementById(id);
+    let panelCount = 1;
+    let blankPanels = [];
     function emojiMarkup(item, className) {
       return item.image ? `<img class="${className}-image" src="${item.image}" alt=""> <span>${item.label}</span>` : `<span>${item.label}</span>`;
     }
@@ -70,6 +76,24 @@
       row.querySelector('.remove').onclick = () => row.remove(); $('objects').append(row);
     }
     $('add').onclick = () => addObject();
+    function renderPanelControls() {
+      const allBlank = blankPanels.length === panelCount;
+      $('panelControls').innerHTML = `<strong>Panels</strong> ${Array.from({length: panelCount}, (_, panel) => {
+        const blank = blankPanels.includes(panel);
+        return `<button type="button" data-panel="${panel}">${blank ? 'Restore' : 'Blank'} panel ${panel + 1}</button>`;
+      }).join(' ')} <button type="button" data-all="true">${allBlank ? 'Restore' : 'Blank'} all panels</button>`;
+      $('panelControls').querySelectorAll('button').forEach(button => button.onclick = async () => {
+        const next = button.dataset.all
+          ? (allBlank ? [] : Array.from({length: panelCount}, (_, panel) => panel))
+          : (blankPanels.includes(Number(button.dataset.panel))
+            ? blankPanels.filter(panel => panel !== Number(button.dataset.panel))
+            : [...blankPanels, Number(button.dataset.panel)]);
+        const response = await fetch('/api/display', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({blankPanels: next})});
+        if (!response.ok) { $('status').textContent = 'Error blanking panels'; return; }
+        blankPanels = next.sort((a, b) => a - b); renderPanelControls();
+        $('status').textContent = blankPanels.length ? 'Selected panels blanked' : 'All panels restored';
+      });
+    }
     $('brightness').oninput = () => $('brightnessValue').textContent = $('brightness').value;
     $('send').onclick = async () => {
       const items = [...document.querySelectorAll('.object')].map(row => ({
@@ -86,6 +110,11 @@
       } catch (error) { $('status').textContent = 'Error: ' + error.message; }
     };
     addObject({emoji: '😀', x: 4, y: 4, size: 56});
+    fetch('/api/state').then(response => response.json()).then(state => {
+      panelCount = state.panelCount || 1;
+      blankPanels = (state.panels?.[0]?.blankPanels || []).slice();
+      renderPanelControls();
+    }).catch(() => renderPanelControls());
   </script>
 </body>
 </html>

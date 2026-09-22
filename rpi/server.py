@@ -149,6 +149,7 @@ class MatrixDisplay:
             "color": {"r": 255, "g": 255, "b": 255},
             "brightness": config["brightness"],
             "objects": [{"emoji": "\U0001f600", "x": 4, "y": 4, "size": 56}],
+            "blankPanels": [],
         }
         self.dry_run = dry_run
         self.canvas = None
@@ -195,6 +196,10 @@ class MatrixDisplay:
                         logging.warning("Font not found at %s; using Pillow's built-in font", self.config["font"])
                         font = ImageFont.load_default()
                     draw.text((item["x"], item["y"]), item["emoji"], fill=(255, 255, 255), font=font)
+            for panel in self.state["blankPanels"]:
+                left = panel * self.config["cols"]
+                draw.rectangle((left, 0, left + self.config["cols"] - 1,
+                                self.matrix.height - 1), fill=(0, 0, 0))
             rotation = self.config.get("rotation", 0) % 360
             if rotation:
                 image = image.rotate(rotation, expand=False)
@@ -225,6 +230,12 @@ class MatrixDisplay:
                     channel: max(0, min(255, int(color[channel])))
                     for channel in ("r", "g", "b")
                 }
+            if "blankPanels" in payload:
+                panel_count = self.config["chain_length"] * self.config["parallel"]
+                self.state["blankPanels"] = sorted({
+                    panel for panel in payload["blankPanels"]
+                    if isinstance(panel, int) and 0 <= panel < panel_count
+                })
         self.render()
 
 
@@ -251,7 +262,8 @@ def make_handler(display):
 
         def do_GET(self):
             if urlparse(self.path).path == "/api/state":
-                self.send_json({"panelCount": 1, "panels": [display.state]})
+                panel_count = display.config["chain_length"] * display.config["parallel"]
+                self.send_json({"panelCount": panel_count, "panels": [display.state]})
                 return
             if urlparse(self.path).path == "/fuck-off-smiley.png":
                 body = (ROOT / "assets" / "fuck-off-smiley.png").read_bytes()
