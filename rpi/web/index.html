@@ -7,10 +7,17 @@
   <style>
     :root { color-scheme: dark; font: 16px system-ui, sans-serif; }
     body { max-width: 42rem; margin: 2rem auto; padding: 0 1rem; }
-    .object { display: grid; grid-template-columns: 5rem 1fr 1fr 1fr 3rem; gap: .5rem; align-items: end; margin: 1rem 0; }
+    .object { display: grid; grid-template-columns: 8rem 1fr 1fr 1fr 3rem; gap: .5rem; align-items: end; margin: 1rem 0; }
     label { display: block; font-size: .8rem; }
-    input, select, button { box-sizing: border-box; font: inherit; padding: .55rem; width: 100%; }
+    input, button { box-sizing: border-box; font: inherit; padding: .55rem; width: 100%; }
     button { cursor: pointer; }
+    .emoji-control { position: relative; }
+    .emoji-current { display: flex; align-items: center; gap: .4rem; min-height: 2.5rem; text-align: left; }
+    .emoji-current img, .emoji-option img { width: 2rem; height: 2rem; object-fit: contain; }
+    .emoji-menu { display: none; position: absolute; z-index: 2; top: calc(100% + .25rem); left: 0; width: 16rem; max-height: 20rem; overflow-y: auto; padding: .35rem; background: #20242c; border: 1px solid #596170; border-radius: .4rem; box-shadow: 0 .5rem 1rem #0008; }
+    .emoji-control.open .emoji-menu { display: grid; gap: .2rem; }
+    .emoji-option { display: flex; align-items: center; gap: .5rem; border: 0; background: transparent; color: inherit; text-align: left; }
+    .emoji-option:hover { background: #343b48; }
     #status { min-height: 1.5rem; margin-top: 1rem; color: #9f9; }
   </style>
 </head>
@@ -26,16 +33,39 @@
   <button id="send">Update display</button>
   <div id="status" role="status"></div>
   <script>
-    const emojis = ['😀', '🙂', '❤️', '⭐', '👍', '⬆️', '⬇️', '🔥', '💰', '🤑', '🖕', 'fuck-you-smiley', '🤬', '🤮', '👎', 'fuck-you-double-text', 'fuck-you-double', 'fuck-afd'];
+    const emojis = [
+      {value: '😀', label: '😀'}, {value: '🙂', label: '🙂'}, {value: '❤️', label: '❤️'},
+      {value: '⭐', label: '⭐'}, {value: '👍', label: '👍'}, {value: '⬆️', label: '⬆️'},
+      {value: '⬇️', label: '⬇️'}, {value: '🔥', label: '🔥'}, {value: '💰', label: '💰'},
+      {value: '🤑', label: '🤑'}, {value: '🖕', label: '🖕'}, {value: '🤬', label: '🤬'},
+      {value: '🤮', label: '🤮'}, {value: '👎', label: '👎'},
+      {value: 'fuck-off-smiley', label: 'fuck-off-smiley', image: '/fuck-off-smiley.png'},
+      {value: 'fuck-you-smiley', label: 'fuck-you-smiley', image: '/fuck-you-smiley.png'},
+      {value: 'fuck-you-double-text', label: 'fuck-you-double-text', image: '/fuck-you-double-text.png'},
+      {value: 'fuck-you-double', label: 'fuck-you-double', image: '/fuck-you-double.png'},
+      {value: 'fuck-afd', label: 'fuck-afd', image: '/fuck-afd.png'}
+    ];
     const $ = id => document.getElementById(id);
+    function emojiMarkup(item, className) {
+      return item.image ? `<img class="${className}-image" src="${item.image}" alt=""> <span>${item.label}</span>` : `<span>${item.label}</span>`;
+    }
     function addObject(item = {emoji: '🔥', x: 0, y: 0, size: 56}) {
       const row = document.createElement('div'); row.className = 'object';
-      row.innerHTML = `<label>Emoji<select class="emoji">${emojis.map(e => `<option>${e}</option>`).join('')}</select></label>
+      row.innerHTML = `<label>Emoji<div class="emoji-control"><button class="emoji-current" type="button"></button><div class="emoji-menu">${emojis.map(e => `<button class="emoji-option" type="button" data-value="${e.value}">${emojiMarkup(e, 'emoji-option')}</button>`).join('')}</div><input class="emoji-value" type="hidden"></div></label>
         <label>X<input class="x" type="number" min="0" max="255"></label>
         <label>Y<input class="y" type="number" min="0" max="63"></label>
         <label>Size<input class="size" type="number" min="8" max="64"></label>
         <button class="remove" type="button">Remove</button>`;
-      row.querySelector('.emoji').value = item.emoji; row.querySelector('.x').value = item.x;
+      const control = row.querySelector('.emoji-control');
+      const current = row.querySelector('.emoji-current');
+      const value = row.querySelector('.emoji-value');
+      const setEmoji = selected => {
+        const option = emojis.find(candidate => candidate.value === selected) || emojis[0];
+        value.value = option.value; current.innerHTML = emojiMarkup(option, 'emoji-current');
+      };
+      setEmoji(item.emoji); current.onclick = () => control.classList.toggle('open');
+      row.querySelectorAll('.emoji-option').forEach(option => option.onclick = () => { setEmoji(option.dataset.value); control.classList.remove('open'); });
+      row.querySelector('.x').value = item.x;
       row.querySelector('.y').value = item.y; row.querySelector('.size').value = item.size;
       row.querySelector('.remove').onclick = () => row.remove(); $('objects').append(row);
     }
@@ -43,7 +73,7 @@
     $('brightness').oninput = () => $('brightnessValue').textContent = $('brightness').value;
     $('send').onclick = async () => {
       const items = [...document.querySelectorAll('.object')].map(row => ({
-        emoji: row.querySelector('.emoji').value, x: Number(row.querySelector('.x').value),
+        emoji: row.querySelector('.emoji-value').value, x: Number(row.querySelector('.x').value),
         y: Number(row.querySelector('.y').value), size: Number(row.querySelector('.size').value)
       }));
       const hex = $('color').value;

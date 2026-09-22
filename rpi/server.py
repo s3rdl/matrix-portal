@@ -210,7 +210,7 @@ class MatrixDisplay:
             if "objects" in payload:
                 self.state["objects"] = [
                     {
-                        "emoji": str(item.get("emoji", ""))[:8],
+                        "emoji": str(item.get("emoji", ""))[:32],
                         "x": max(0, min(width - 1, int(item.get("x", 0)))),
                         "y": max(0, min(height - 1, int(item.get("y", 0)))),
                         "size": max(8, min(64, int(item.get("size", 56)))),
