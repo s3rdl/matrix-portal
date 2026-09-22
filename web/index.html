@@ -24,6 +24,7 @@
     <input id="device" value="http://led-matrix.local" placeholder="http://192.168.1.50">
     <button id="load">Load panels</button>
     <button id="wifiSetup">Change Wi-Fi</button>
+    <button id="blankAll">Blank all panels</button>
   </div>
   <div id="panels" class="grid"></div>
   <article>
@@ -37,7 +38,15 @@
     const $ = id => document.getElementById(id);
     const emojis = ['😀', '🙂', '❤️', '⭐', '👍', '⬆️', '⬇️', '🔥', '💰', '🤑', '🖕', 'fuck-you-smiley', '🤬', '🤮', '👎', 'fuck-you-double-text', 'fuck-you-double', 'fuck-afd'];
     let objectItems = [];
+    let blankPanels = [];
+    let panelCount = 1;
     const baseUrl = () => ($('device').value || window.location.origin).replace(/\/$/, '');
+    async function setBlankPanels(next) {
+      const response = await fetch(baseUrl() + '/api/display', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({blankPanels: next.sort((a, b) => a - b)})});
+      if (!response.ok) throw new Error(await response.text());
+      blankPanels = next;
+      await loadPanels();
+    }
     const colorHex = panel => '#' + [panel.r, panel.g, panel.b].map(value => value.toString(16).padStart(2, '0')).join('');
     function panelEditor(panel, index) {
       const card = document.createElement('article');
@@ -45,8 +54,9 @@
         <label>Message</label><input class="text" maxlength="120">
         <label>Color</label><input class="color" type="color">
         <label>Brightness: <span class="brightnessValue"></span></label>
-        <input class="brightness" type="range" min="0" max="255">
-        <button class="send">Update module</button>`;
+         <input class="brightness" type="range" min="0" max="255">
+         <button class="send">Update module</button>
+         <button class="blankPanel" type="button">${blankPanels.includes(index) ? 'Restore module' : 'Blank module'}</button>`;
       card.querySelector('.text').value = panel.text || '';
       card.querySelector('.color').value = colorHex(panel.color || {r: 255, g: 255, b: 255});
       card.querySelector('.brightness').value = panel.brightness ?? 64;
@@ -65,8 +75,12 @@
           if (!response.ok) throw new Error(await response.text());
           $('status').textContent = `Module ${index + 1} updated`;
         } catch (error) { $('status').textContent = 'Error: ' + error.message; }
-      });
-      return card;
+       });
+       card.querySelector('.blankPanel').addEventListener('click', async () => {
+         try { await setBlankPanels(blankPanels.includes(index) ? blankPanels.filter(panel => panel !== index) : [...blankPanels, index]); }
+         catch (error) { $('status').textContent = 'Error: ' + error.message; }
+       });
+       return card;
     }
     function renderObjects() {
       $('objects').replaceChildren(...objectItems.map((item, index) => {
@@ -104,13 +118,19 @@
         const response = await fetch(baseUrl() + '/api/state');
         if (!response.ok) throw new Error(await response.text());
         const state = await response.json();
-        objectItems = state.objects || [];
-        renderObjects();
+         objectItems = state.objects || [];
+         panelCount = state.panelCount || 1;
+         blankPanels = state.blankPanels || [];
+         renderObjects();
         $('panels').replaceChildren(...state.panels.map(panelEditor));
         $('status').textContent = `${state.panelCount} module(s) loaded`;
       } catch (error) { $('status').textContent = 'Error: ' + error.message; }
     }
     $('load').addEventListener('click', loadPanels);
+    $('blankAll').addEventListener('click', async () => {
+      try { await setBlankPanels(blankPanels.length === panelCount ? [] : Array.from({length: panelCount}, (_, index) => index)); }
+      catch (error) { $('status').textContent = 'Error: ' + error.message; }
+    });
     $('addObject').addEventListener('click', () => {
       objectItems.push({emoji: '🔥', x: 0, y: 0, size: 56});
       renderObjects();

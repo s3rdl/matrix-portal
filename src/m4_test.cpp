@@ -6,8 +6,8 @@
 #include "generated_emoji_sprites.h"
 
 // Matrix Portal M4 HUB75 pinout. One 64x64 panel.
-const char WIFI_SSID[] = "GPDEWH";
-const char WIFI_PASSWORD[] = "$GPDEWareH0us3";
+const char WIFI_SSID[] = "YOUR_WIFI_SSID";
+const char WIFI_PASSWORD[] = "YOUR_WIFI_PASSWORD";
 const char AP_SSID[] = "LEDMatrix-M4";
 const char AP_PASSWORD[] = "matrix-test";
 uint8_t rgbPins[] = {7, 8, 9, 10, 11, 12};
@@ -20,13 +20,14 @@ constexpr uint8_t MAX_BRIGHTNESS = 24;
 // Indexed-color asset masks are fast; set false to restore the detailed renderer.
 constexpr bool USE_PRE_RENDERED_ASSETS = true;
 constexpr bool USE_RGB565_ASSETS = true;
-constexpr bool SCALE_RGB565_ASSETS = false;
+constexpr bool SCALE_RGB565_ASSETS = true;
 struct DisplayState {
   uint8_t brightness = 24, bgR = 0, bgG = 0, bgB = 0;
   uint16_t rotation = 0;
   String text;
   JsonDocument objects;
 } state;
+bool panelBlank = false;
 bool redrawRequested = true;
 bool wifiApMode = false;
 uint8_t wifiRetryCount = 0;
@@ -265,6 +266,7 @@ void drawDisplay() {
     matrix.setTextWrap(false); matrix.setTextColor(color(255, 255, 255)); matrix.setCursor(2, 2); matrix.print(state.text);
   }
   for (JsonObject object : state.objects["objects"].as<JsonArray>()) drawObject(object);
+  if (panelBlank) matrix.fillScreen(color(0, 0, 0));
   matrix.show(); redrawRequested = false;
 }
 
@@ -278,12 +280,19 @@ bool applyCommand(const String &payload) {
   if (bg.isNull()) bg = incoming["color"];
   if (!bg.isNull()) { state.bgR = constrain((int)(bg["r"] | 0), 0, 255); state.bgG = constrain((int)(bg["g"] | 0), 0, 255); state.bgB = constrain((int)(bg["b"] | 0), 0, 255); }
   if (incoming["objects"].is<JsonArray>()) state.objects["objects"] = incoming["objects"];
+  if (incoming["blankPanels"].is<JsonArray>()) {
+    panelBlank = false;
+    for (JsonVariant value : incoming["blankPanels"].as<JsonArray>())
+      if ((value | -1) == 0) panelBlank = true;
+  }
   redrawRequested = true; return true;
 }
 
 String stateJson() {
   JsonDocument output;
   output["width"] = WIDTH; output["height"] = HEIGHT; output["brightness"] = state.brightness; output["rotation"] = state.rotation; output["text"] = state.text; output["objects"] = state.objects["objects"];
+  JsonArray blank = output["blankPanels"].to<JsonArray>();
+  if (panelBlank) blank.add(0);
   JsonObject bg = output["background"].to<JsonObject>(); bg["r"] = state.bgR; bg["g"] = state.bgG; bg["b"] = state.bgB;
   String result; serializeJson(output, result); return result;
 }
@@ -352,13 +361,18 @@ const char UI[] PROGMEM = R"HTML(
   <div class="controls">
     <label>Background <input id="background" type="color" value="#000000"></label>
     <label>Rotation <select id="rotation"><option value="0">Normal</option><option value="180">Upside down</option></select></label>
-  <label>Brightness <span id="brightnessValue">24</span><input id="brightness" type="range" min="0" max="255" value="24"></label>
+    <label>X <input id="objectX" type="number" min="0" max="63" value="4"></label>
+    <label>Y <input id="objectY" type="number" min="0" max="63" value="4"></label>
+    <label>Size <input id="objectSize" type="number" min="8" max="64" value="56"></label>
+    <label>Brightness <span id="brightnessValue">24</span><input id="brightness" type="range" min="0" max="255" value="24"></label>
+    <button id="blankPanel" type="button">Blank panel</button>
   </div>
   <div id="status" role="status">Ready</div>
 <script>
   const emojis = ['😀', '🙂', '❤️', '⭐', '👍', '⬆️', '⬇️', '🔥', '💰', '🤑'];
   const $ = id => document.getElementById(id);
   let selected = '😀';
+  let panelBlank = false;
   const customSmiley = 'fuck-off-smiley';
   const customYouSmiley = 'fuck-you-smiley';
   const customDoubleText = 'fuck-you-double-text';
@@ -387,17 +401,19 @@ const char UI[] PROGMEM = R"HTML(
   }
   async function send() {
     $('status').textContent = 'Sending...';
-    const body = {objects: [{emoji: selected, x: 4, y: 4, size: 56}], background: rgb($('background').value), brightness: +$('brightness').value, rotation: +$('rotation').value};
+    const body = {objects: [{emoji: selected, x: +$('objectX').value, y: +$('objectY').value, size: +$('objectSize').value}], blankPanels: panelBlank ? [0] : [], background: rgb($('background').value), brightness: +$('brightness').value, rotation: +$('rotation').value};
     try { const response = await fetch('/api/display', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)}); if (!response.ok) throw new Error(await response.text()); $('status').textContent = selected + ' is on the panel'; }
     catch (error) { $('status').textContent = 'Could not update panel'; }
   }
   async function load() {
     drawPicker();
-    try { const state = await (await fetch('/api/state')).json(); const item = (state.objects || [])[0]; if (item) { selected = item.emoji === '🖕' ? customSmiley : item.emoji; showPreview(selected); } $('brightness').value = state.brightness ?? 24; $('brightnessValue').textContent = $('brightness').value; $('rotation').value = state.rotation ?? 0; $('background').value = hex(state.background || {}); document.querySelectorAll('.emoji').forEach(button => button.classList.toggle('selected', button.dataset.emoji === selected)); }
+    try { const state = await (await fetch('/api/state')).json(); const item = (state.objects || [])[0]; if (item) { selected = item.emoji === '🖕' ? customSmiley : item.emoji; showPreview(selected); $('objectX').value = item.x ?? 4; $('objectY').value = item.y ?? 4; $('objectSize').value = item.size ?? 56; } panelBlank = (state.blankPanels || []).includes(0); $('blankPanel').textContent = panelBlank ? 'Restore panel' : 'Blank panel'; $('brightness').value = state.brightness ?? 24; $('brightnessValue').textContent = $('brightness').value; $('rotation').value = state.rotation ?? 0; $('background').value = hex(state.background || {}); document.querySelectorAll('.emoji').forEach(button => button.classList.toggle('selected', button.dataset.emoji === selected)); }
     catch (error) { $('status').textContent = 'Panel is offline'; }
   }
   $('brightness').oninput = () => $('brightnessValue').textContent = $('brightness').value;
   $('brightness').onchange = send; $('background').onchange = send; $('rotation').onchange = send; load();
+  $('objectX').onchange = send; $('objectY').onchange = send; $('objectSize').onchange = send;
+  $('blankPanel').onclick = () => { panelBlank = !panelBlank; $('blankPanel').textContent = panelBlank ? 'Restore panel' : 'Blank panel'; send(); };
 </script>
 </body>
 </html>

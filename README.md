@@ -129,6 +129,8 @@ sudo journalctl -u ledmatrix-rpi -f
 sudo systemctl restart ledmatrix-rpi
 ```
 
+For a Pi-only animation test, select `🔥 animated` in the picker or send an object with `"emoji": "fire-animated"`. The existing static `🔥` remains unchanged. The test animation runs locally at roughly 10 FPS and stops automatically when the animated object is removed or replaced.
+
 ## HTTP API
 
 The S3, M4, and Pi implementations expose the following core endpoints:
@@ -161,7 +163,23 @@ Example emoji object command:
 }
 ```
 
+On the Raspberry Pi implementation, individual chained panels can be blanked without stopping the service:
+
+```json
+{"blankPanels": [0, 2]}
+```
+
+Send `{"blankPanels": []}` to restore all panels. The Pi web UI provides these controls automatically from the configured chain length.
+
 Object coordinates use the full logical display. Supported object sizes are 8 through 64 pixels. `GET /api/state` returns the current panel configuration and object list.
+
+The Matrix Portal UIs expose object position and size controls. The S3 supports the full configured panel chain; the M4 supports one 64x64 panel. Both Matrix Portal firmwares also accept `blankPanels` and render blanked panels locally without stopping the service:
+
+```json
+{"blankPanels": [0, 2]}
+```
+
+Use `{"blankPanels": []}` to restore all panels. The M4 uses panel index `0`.
 
 ## Custom Emoji Assets
 

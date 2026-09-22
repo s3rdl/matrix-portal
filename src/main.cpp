@@ -53,6 +53,7 @@ constexpr char SETUP_SSID[] = "LEDMatrix-Setup";
 constexpr char SETUP_PASSWORD[] = "matrix-setup";
 uint8_t wifiProfileIndex = 0;
 bool mdnsStarted = false;
+bool blankPanels[PANEL_COUNT] = {};
 
 uint16_t displayColor(const PanelState &panel) {
   const auto scale = [&panel](uint8_t value) -> uint8_t {
@@ -101,14 +102,15 @@ bool drawRgb565Asset(const String &emoji, int16_t x, int16_t y, int16_t size) {
 
   const bool arrow = emoji == "⬆️" || emoji == "⬇️" || emoji == "up" ||
                      emoji == "down" || emoji == "⬆" || emoji == "⬇";
-  const int16_t offset = (size - 48) / 2;
   const int16_t xShift = arrow ? 2 : 0;
-  for (int16_t row = 0; row < 48; ++row)
-    for (int16_t column = 0; column < 48; ++column) {
-      const uint16_t pixelColor = pgm_read_word(&sprite[row * 48 + column]);
+  for (int16_t row = 0; row < size; ++row)
+    for (int16_t column = 0; column < size; ++column) {
+      const int16_t sourceRow = row * 48 / size;
+      const int16_t sourceColumn = column * 48 / size;
+      const uint16_t pixelColor = pgm_read_word(&sprite[sourceRow * 48 + sourceColumn]);
       if (pixelColor) {
         // Zero is transparent; one is the intentionally opaque black artwork.
-        drawPixelRotated(x + offset + xShift + column, y + offset + row,
+        drawPixelRotated(x + xShift + column, y + row,
                           pixelColor == 1 ? matrix.color565(0, 0, 0) : pixelColor);
       }
     }
@@ -147,6 +149,13 @@ bool applyCommand(const String &payload) {
   }
   if (doc["objects"].is<JsonArray>())
     displayObjects["objects"] = doc["objects"];
+  if (doc["blankPanels"].is<JsonArray>()) {
+    for (uint8_t index = 0; index < PANEL_COUNT; ++index) blankPanels[index] = false;
+    for (JsonVariant value : doc["blankPanels"].as<JsonArray>()) {
+      const int index = value | -1;
+      if (index >= 0 && index < PANEL_COUNT) blankPanels[index] = true;
+    }
+  }
 
   if (doc["panel"].is<uint8_t>()) {
     const uint8_t index = doc["panel"];
@@ -186,6 +195,9 @@ String stateJson() {
   doc["background"]["g"] = backgroundGreen;
   doc["background"]["b"] = backgroundBlue;
   doc["objects"] = displayObjects["objects"];
+  JsonArray blank = doc["blankPanels"].to<JsonArray>();
+  for (uint8_t index = 0; index < PANEL_COUNT; ++index)
+    if (blankPanels[index]) blank.add(index);
   String result;
   serializeJson(doc, result);
   return result;
@@ -403,6 +415,11 @@ void drawDisplay() {
     }
   }
   for (JsonObject object : displayObjects["objects"].as<JsonArray>()) drawObject(object);
+  for (uint8_t index = 0; index < PANEL_COUNT; ++index) {
+    if (!blankPanels[index]) continue;
+    matrix.fillRect(index * PANEL_WIDTH, 0, PANEL_WIDTH, PANEL_HEIGHT,
+                    matrix.color565(0, 0, 0));
+  }
   matrix.show();
   redrawRequested = false;
 }

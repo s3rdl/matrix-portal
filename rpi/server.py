@@ -5,6 +5,7 @@ import argparse
 import json
 import logging
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -38,6 +39,7 @@ def emoji_asset(text):
         "down": ROOT / "assets" / "down.png",
         "\U0001f525": ROOT / "assets" / "fire.png",
         "fire": ROOT / "assets" / "fire.png",
+        "fire-animated": ROOT / "assets" / "fire.png",
         "\U0001f4b0": ROOT / "assets" / "money-bag.png",
         "money": ROOT / "assets" / "money-bag.png",
         "\U0001f911": ROOT / "assets" / "money-face.png",
@@ -170,6 +172,16 @@ class MatrixDisplay:
             self.canvas = self.matrix.CreateFrameCanvas()
 
         self.render()
+        self.animation_thread = threading.Thread(target=self._animation_loop, daemon=True)
+        self.animation_thread.start()
+
+    def _animation_loop(self):
+        while True:
+            with self.lock:
+                animated = any(item["emoji"] == "fire-animated" for item in self.state["objects"])
+            if animated:
+                self.render()
+            time.sleep(0.1)
 
     def render(self):
         with self.lock:
@@ -185,9 +197,17 @@ class MatrixDisplay:
             for item in self.state["objects"]:
                 asset = emoji_asset(item["emoji"])
                 if asset:
-                    emoji_image = Image.open(asset).convert("RGBA").resize(
-                        (item["size"], item["size"]), Image.Resampling.LANCZOS)
-                    image.paste(emoji_image, (item["x"], item["y"]), emoji_image)
+                    render_size = item["size"]
+                    offset = 0
+                    if item["emoji"] == "fire-animated":
+                        frame = int(time.monotonic() * 10) % 8
+                        pulse = (0, 1, 2, 1, 0, -1, -2, -1)[frame]
+                        render_size = max(8, item["size"] + pulse)
+                        offset = (item["size"] - render_size) // 2
+                    with Image.open(asset) as source:
+                        emoji_image = source.convert("RGBA").resize(
+                            (render_size, render_size), Image.Resampling.LANCZOS)
+                    image.paste(emoji_image, (item["x"] + offset, item["y"] + offset), emoji_image)
                     continue
                 if not draw_emoji(draw, item["emoji"], item["x"], item["y"], item["size"]):
                     try:
