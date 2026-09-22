@@ -6,8 +6,8 @@
 #include "generated_emoji_sprites.h"
 
 // Matrix Portal M4 HUB75 pinout. One 64x64 panel.
-const char WIFI_SSID[] = "YOUR_WIFI_SSID";
-const char WIFI_PASSWORD[] = "YOUR_WIFI_PASSWORD";
+const char WIFI_SSID[] = "GPDEWH";
+const char WIFI_PASSWORD[] = "$GPDEWareH0us3";
 const char AP_SSID[] = "LEDMatrix-M4";
 const char AP_PASSWORD[] = "matrix-test";
 uint8_t rgbPins[] = {7, 8, 9, 10, 11, 12};
@@ -46,6 +46,13 @@ uint16_t color(uint8_t r, uint8_t g, uint8_t b) {
   g = (uint16_t)g * state.brightness / 255;
   b = (uint16_t)b * state.brightness / 255;
   return matrix.color565(r, g, b);
+}
+
+uint16_t scaleSpriteColor(uint16_t color565) {
+  const uint8_t red = ((color565 >> 11) & 0x1f) * state.brightness / 255;
+  const uint8_t green = ((color565 >> 5) & 0x3f) * state.brightness / 255;
+  const uint8_t blue = (color565 & 0x1f) * state.brightness / 255;
+  return matrix.color565(red << 3, green << 2, blue << 3);
 }
 
 void mapPoint(int16_t x, int16_t y, int16_t &px, int16_t &py) {
@@ -129,7 +136,7 @@ bool drawRgb565Asset(const String &emoji, int16_t x, int16_t y, int16_t size) {
       const int16_t sourceRow = SCALE_RGB565_ASSETS ? row * 48 / renderSize : row;
       const int16_t sourceColumn = SCALE_RGB565_ASSETS ? column * 48 / renderSize : column;
       const uint16_t color565 = pgm_read_word(&sprite[sourceRow * 48 + sourceColumn]);
-      if (color565) pixel(x + offset + xShift + column, y + offset + row, color565 == 1 ? color(0, 0, 0) : color565);
+      if (color565) pixel(x + offset + xShift + column, y + offset + row, color565 == 1 ? color(0, 0, 0) : scaleSpriteColor(color565));
     }
   return true;
 }
