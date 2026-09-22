@@ -61,22 +61,6 @@ uint16_t displayColor(const PanelState &panel) {
   return matrix.color565(scale(panel.red), scale(panel.green), scale(panel.blue));
 }
 
-uint16_t displayBackgroundColor() {
-  const uint8_t brightness = panels[0].brightness;
-  return matrix.color565(
-      static_cast<uint8_t>((static_cast<uint16_t>(backgroundRed) * brightness) / 255),
-      static_cast<uint8_t>((static_cast<uint16_t>(backgroundGreen) * brightness) / 255),
-      static_cast<uint8_t>((static_cast<uint16_t>(backgroundBlue) * brightness) / 255));
-}
-
-uint16_t scaleSpriteColor(uint16_t color565) {
-  const uint8_t brightness = panels[0].brightness;
-  const uint8_t red = ((color565 >> 11) & 0x1f) * brightness / 255;
-  const uint8_t green = ((color565 >> 5) & 0x3f) * brightness / 255;
-  const uint8_t blue = (color565 & 0x1f) * brightness / 255;
-  return matrix.color565(red << 3, green << 2, blue << 3);
-}
-
 void mapPoint(int16_t x, int16_t y, int16_t &px, int16_t &py) {
   switch (displayRotation) {
     case 90: px = DISPLAY_WIDTH - 1 - y; py = x; break;
@@ -125,7 +109,7 @@ bool drawRgb565Asset(const String &emoji, int16_t x, int16_t y, int16_t size) {
       if (pixelColor) {
         // Zero is transparent; one is the intentionally opaque black artwork.
         drawPixelRotated(x + offset + xShift + column, y + offset + row,
-                          pixelColor == 1 ? matrix.color565(0, 0, 0) : scaleSpriteColor(pixelColor));
+                          pixelColor == 1 ? matrix.color565(0, 0, 0) : pixelColor);
       }
     }
   return true;
@@ -408,7 +392,7 @@ bool handleBleWifiCommand(const String &payload) {
 }
 
 void drawDisplay() {
-  matrix.fillScreen(displayBackgroundColor());
+  matrix.fillScreen(matrix.color565(backgroundRed, backgroundGreen, backgroundBlue));
   for (uint8_t index = 0; index < PANEL_COUNT; ++index) {
     matrix.setTextWrap(false);
     matrix.setTextSize(1);

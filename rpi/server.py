@@ -9,7 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
-from PIL import Image, ImageDraw, ImageEnhance, ImageFont
+from PIL import Image, ImageDraw, ImageFont
 
 
 ROOT = Path(__file__).resolve().parent
@@ -174,7 +174,7 @@ class MatrixDisplay:
         with self.lock:
             color = self.state["color"]
             brightness = self.state["brightness"] / 255
-            rgb = tuple(color[channel] for channel in ("r", "g", "b"))
+            rgb = tuple(round(color[channel] * brightness) for channel in ("r", "g", "b"))
             if self.dry_run:
                 logging.info("render objects=%d color=%s brightness=%d", len(self.state["objects"]), rgb, self.state["brightness"])
                 return
@@ -198,7 +198,6 @@ class MatrixDisplay:
             rotation = self.config.get("rotation", 0) % 360
             if rotation:
                 image = image.rotate(rotation, expand=False)
-            image = ImageEnhance.Brightness(image).enhance(brightness)
             self.canvas.SetImage(image)
             self.canvas = self.matrix.SwapOnVSync(self.canvas)
 

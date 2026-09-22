@@ -48,13 +48,6 @@ uint16_t color(uint8_t r, uint8_t g, uint8_t b) {
   return matrix.color565(r, g, b);
 }
 
-uint16_t scaleSpriteColor(uint16_t color565) {
-  const uint8_t red = ((color565 >> 11) & 0x1f) * state.brightness / 255;
-  const uint8_t green = ((color565 >> 5) & 0x3f) * state.brightness / 255;
-  const uint8_t blue = (color565 & 0x1f) * state.brightness / 255;
-  return matrix.color565(red << 3, green << 2, blue << 3);
-}
-
 void mapPoint(int16_t x, int16_t y, int16_t &px, int16_t &py) {
   switch (state.rotation) {
     case 90: px = WIDTH - 1 - y; py = x; break;
@@ -136,7 +129,7 @@ bool drawRgb565Asset(const String &emoji, int16_t x, int16_t y, int16_t size) {
       const int16_t sourceRow = SCALE_RGB565_ASSETS ? row * 48 / renderSize : row;
       const int16_t sourceColumn = SCALE_RGB565_ASSETS ? column * 48 / renderSize : column;
       const uint16_t color565 = pgm_read_word(&sprite[sourceRow * 48 + sourceColumn]);
-      if (color565) pixel(x + offset + xShift + column, y + offset + row, color565 == 1 ? color(0, 0, 0) : scaleSpriteColor(color565));
+      if (color565) pixel(x + offset + xShift + column, y + offset + row, color565 == 1 ? color(0, 0, 0) : color565);
     }
   return true;
 }
